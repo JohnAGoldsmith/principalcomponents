@@ -1,315 +1,441 @@
-#-*- coding: <utf-16> -*- 
-import codecs
+#-*- coding: <utf-16> -*-
+#import codecs
 import os
 import sys
 import string
 import operator
 mywords=dict()
 from math import sqrt
-from  collections import defaultdict 
-import numpy
-from numpy import *
-import time
+from  collections import defaultdict
+import numpy as np
+from scipy import linalg as LA
+import scipy.sparse as spr
+
+from sklearn.decomposition import PCA
+from sklearn.decomposition import NMF
+#import nimfa
+
+#from scipy.sparse.linalg import svds
+#from numpy import *
+#import time
 #from pyx import *
 
 
 GraphicsFlag = False
 
 #-----------------------------------------------------------------------#
-#									#
-#	This program takes a trigram file and a word list		#	
-#	and creates a file with lists of most similar words.		#
-#	John Goldsmith and Wang Xiuli 2012.				#
-#									#
+#                                    #
+#    This program takes a trigram file and a word list        #
+#    and creates a file with lists of most similar words.        #
+#    John Goldsmith and Wang Xiuli 2012.                #
+#                                    #
 #-----------------------------------------------------------------------#
 
 #---------------------------------------------------------------------------#
-#	Variables to be changed by user
+#    Variables to be changed by user
 #---------------------------------------------------------------------------#
 LatexFlag = True
 PrintEigenvectorsFlag = True
-unicodeFlag = False 
+unicodeFlag = False
 FileEncoding =  "ascii"
 
-datafilelocation 	=  "../../data/"
-languagename 		= "english-browncorpus"
-  
-wordfolder    		= datafilelocation + languagename + "/dx1/"
-trigramfolder 		= datafilelocation + languagename + "/ngrams/"
-outfolder     		= datafilelocation + languagename + "/neighbors/"
+datafilelocation     =  "../../../data/"
+languagename     = "english-browncorpus"
+languagename = "english-encarta"
 
-outfile_eps 		= outfolder + "dx2_files/results/" + languagename + ".eps" 
-outfile_pdf 		= outfolder + "dx2_files/results/" + languagename + ".pdf" 
+wordfolder = datafilelocation + languagename + "/dx1/"
+trigramfolder = datafilelocation + languagename + "/ngrams/"
+outfolder = datafilelocation + languagename + "/neighbors/"
 
-NumberOfWordsForContext 	= 1000 # 40000
-NumberOfEigenvectors 		= 11
-NumberOfWordsForAnalysis	= 500 #4000
-NumberOfNeighbors  		= 9
+outfile_eps         = outfolder + "dx2_files/results/" + languagename + ".eps"
+outfile_pdf         = outfolder + "dx2_files/results/" + languagename + ".pdf"
 
-punctuation 		= " $/+.,;:?!()\"[]"
+#NumberOfWordsForContext     = 1000 # 40000
+NumberOfEigenvectors         = 20
+NumberOfWordsForAnalysis    = 500 #4000
+NumberOfNeighbors          = 9
 
-
-if NumberOfWordsForAnalysis > NumberOfWordsForContext:
-	print "No -- the number of words to be shown must be no larger than the number of words used for the matrix."
+punctuation         = " $/+.,;:?!()\"[]"
 
 
 
 #---------------------------------------------------------------------------#
-#	File names
+#    File names
 #---------------------------------------------------------------------------#
 
- 
-infileTrigramsname 	= trigramfolder + languagename + "_trigrams.txt"
-infileWordsname 	= wordfolder 	+ languagename + ".dx1" 
-outfilenameEigenvectors	= outfolder 	+ languagename + "_PoS_words_eigenvectors" + ".txt"
-outfilenameNeighbors	= outfolder 	+ languagename + "_PoS_closest" + "_" + str(NumberOfNeighbors ) + "_neighbors.txt"
-outfilenameLatex 	= outfolder 	+ languagename + "_latex.tex"
-outfilenameContexts     = outfolder 	+ languagename + "_contexts.txt"
+
+infileTrigramsname = trigramfolder + languagename + "_trigrams.txt"
+infileWordsname = wordfolder + languagename + ".dx1"
+outfilenameEigenvectors = outfolder + languagename + "_PoS_words_eigenvectors" + ".txt"
+outfilenameNeighbors = outfolder + languagename + "_PoS_closest" + "_" + str(NumberOfNeighbors ) + "_neighbors.txt"
+outfilenameLatex = outfolder + languagename + "_latex.tex"
+outfilenameContexts = outfolder + languagename + "_contexts.txt"
 outfilenameEigenCoordinates = outfolder + languagename + "_eigen_coordinates.txt"
 
-print "\n\nI am looking for: ", infileTrigramsname
+print ("\n\nI am looking for a trigrams file name: ", infileTrigramsname)
 
 #---------------------------------------------------------------------------#
-#	Variables
+#    Variables
 #---------------------------------------------------------------------------#
 
-linecount 		= 0
-contexts 		= dict()
 
-analyzedwordlist 	= list() # this means that the info comes from the independent word file
-analyzedworddict   	= dict()
+#analyzedwordlist = list() # this means that the info comes from the independent word file
 
 
 #---------------------------------------------------------------------------#
-#	Open files for reading and writing
+#    Open files for reading and writing
 #---------------------------------------------------------------------------#
 
 if unicodeFlag:
-	trigramfile 		=codecs.open(infileTrigramsname, encoding = FileEncoding)
-	wordfile 		=codecs.open(infileWordsname, encoding = FileEncoding)
-	if PrintEigenvectorsFlag:
-		outfileEigenvectors = codecs.open (outfilename1, "w",encoding = FileEncoding)
-	outfileNeighbors	= codecs.open (outfileneighborsname, "w",encoding = FileEncoding)
-	
+    trigramfile         =codecs.open(infileTrigramsname, encoding = FileEncoding)
+    wordfile         =codecs.open(infileWordsname, encoding = FileEncoding)
+    if PrintEigenvectorsFlag:
+        outfileEigenvectors = codecs.open (outfilename1, "w",encoding = FileEncoding)
+    outfileNeighbors    = codecs.open (outfileneighborsname, "w",encoding = FileEncoding)
+
 else:
-	if PrintEigenvectorsFlag:
-		outfileEigenvectors = open (outfilenameEigenvectors, "w")
-	outfileNeighbors	= open (outfilenameNeighbors, "w")
-	outfileLatex 		= open (outfilenameLatex, "w")
-	outfileContexts 	= open (outfilenameContexts, "w")
-	eigencoordinates 	= open (outfilenameEigenCoordinates, "w")
+    if PrintEigenvectorsFlag:
+        outfileEigenvectors = open (outfilenameEigenvectors, "w")
+    outfileNeighbors    = open (outfilenameNeighbors, "w")
+    outfileLatex         = open (outfilenameLatex, "w")
+    outfileContexts     = open (outfilenameContexts, "w")
+    eigencoordinates     = open (outfilenameEigenCoordinates, "w")
 
-	wordfile		= open(infileWordsname)
-	trigramfile 		= open(infileTrigramsname)
+    wordfile        = open(infileWordsname)
+    trigramfile         = open(infileTrigramsname)
 
-print "Language is", languagename, ". File name:", languagename, ". Number of words", NumberOfWordsForContext, "."
+print "Language is", languagename +"."
+print "File name:", languagename+ "."
 
 if PrintEigenvectorsFlag:
-	print >>outfileEigenvectors,"#", \
-			languagename, "\n#", \
-			languagename,"\n#", \
-			"Number of words used for matrix", NumberOfWordsForContext, "\n#",\
-			"Number of words analyzed", NumberOfWordsForAnalysis,"\n#", \
-			"Number of neighbors identified", NumberOfNeighbors, "\n#","\n#" 
+    print >>outfileEigenvectors,"#", \
+            languagename, "\n#", \
+            "Number of words analyzed", NumberOfWordsForAnalysis,"\n#", \
+            "Number of neighbors identified", NumberOfNeighbors, "\n#","\n#"
 
 print >>outfileNeighbors, "#", \
-		languagename, "\n#",\
-		languagename, "\n#",\
-		"Number of words used for context", NumberOfWordsForContext,"\n#", \
-		"Number of words analyzed", NumberOfWordsForAnalysis,"\n#", \
-		"Number of neighbors identified", NumberOfNeighbors,"\n#","\n#"
+        languagename, "\n#",\
+        "Number of words analyzed", NumberOfWordsForAnalysis,"\n#", \
+        "Number of neighbors identified", NumberOfNeighbors,"\n#","\n#"
 
- 
+
 #---------------------------------------------------------------------------#
-#	Read trigram file
+#    Read trigram file
 #---------------------------------------------------------------------------#
-from_word_to_context = dict()
-context_list = list()
+total_word_count = 0
+simple_word_count_in_corpus = dict()
+focus_word_to_index = dict()
+index_to_focus_word = dict()
+context_to_index = dict()
+index_to_context = dict()
+context_usage = dict()
+datapoints = np.zeros(( ))
+
+#minimum_number_of_words_in_each_context = 3  #aka context_usage
+minimum_context_use = 100
+minimum_word_use = 200
+
 if True:
-	for line in wordfile:
-		pieces = line.split()
-		if pieces[0] == "#":
-			continue
-		if len(pieces) < 3:
-			continue
-		mywords[pieces[0]] = int(pieces[1])		 
-	print "1. Word file is ", infileWordsname		
-	wordfile.close()
-	analyzedwordlist = sorted(mywords,key=mywords.__getitem__,reverse=True)
-	analyzedwordlist[NumberOfWordsForAnalysis:] = []
-	for i in range(NumberOfWordsForAnalysis):
-		analyzedworddict[analyzedwordlist[i]] = i
- 	 
-	print "2. Reading in trigram file."
-	for line in trigramfile:
-		linecount += 1
-		line = line.split()
-		if line[0] == "#":
-			continue		 
-		thesewords = line # line[0].split() #was split on "_" 
-		#print line
-		focus_word = thesewords[1]
-		if focus_word in analyzedworddict:
-			context = thesewords[0] + "_" +  thesewords[2]
-			if not context in contexts:
-				contexts[context] = dict()
-				context_list.append(context)
-			contexts[context][focus_word] = 1
-			if not focus_word  in from_word_to_context:
-				from_word_to_context[focus_word] = list()
-			from_word_to_context[focus_word].append(context)
-
-		#Left trigrams
-		focus_word = thesewords[0]
-		if focus_word in analyzedworddict:
-			context = "_" + thesewords[1] + "+" + thesewords[2]
-			if not context in contexts:
-				contexts[context] = dict()
-			contexts[context][focus_word] = 1
-			if focus_word not in from_word_to_context:
-				from_word_to_context[focus_word] = list()
-			from_word_to_context[focus_word].append(context)
 
 
-		#Right trigrams
-		focus_word = thesewords[2]
-		if focus_word in analyzedworddict:	
-			context = thesewords[0]  + "+" + thesewords[1] + "_"
-			if not context in contexts:
-				contexts[context] = dict()
-			contexts[context][focus_word] = 1
- 			if focus_word not in from_word_to_context:
-				from_word_to_context[focus_word] = list()
-			from_word_to_context[focus_word].append(context)
+    print "1. Reading in trigram file."
+    data_count = 0
+    trigram_list = list()
+    data_points = list()
+    for line in trigramfile:
+        line = line.split()
+        if line[0] == "#":
+            continue
+        context1 = line[0]
+        context2 = line[2]
+        punctuation = ",.()_"
+        if context1 in punctuation or context2 in punctuation:
+            continue
+        focus_word = line[1]
+        if focus_word in punctuation:
+            continue
+        this_count = int(line[3])
+        context = line[0] + " _ " +  line[2]
+        if not context in context_usage:
+            context_usage[context] = 0
+        context_usage[context] += 1
+        data_points.append((focus_word,context,this_count ))
+        if focus_word not in simple_word_count_in_corpus:
+            simple_word_count_in_corpus[focus_word] = 1
+        else:
+            simple_word_count_in_corpus[focus_word] += 1
+        
+    print "Number of trigrams obtained: ", len(data_points)
+
+
+# row_number    : word_index
+# column_number : context_index
+# data          : count
+
  
 
-#contextlist = contexts.keys() 
  
-print "%-50s %3d = number of contexts" % ("3. End of words and counts.", len(context_list) ) 
+word_index = np.zeros((len(data_points)))
+context_index = np.zeros((len(data_points)))
+focus_word_usage = dict()
 
-#---------------------------------------------------------------------------#
-#	Make zero-mean incidence graph
-#---------------------------------------------------------------------------#
-print  "%-50s" %  "3a. Make zero-mean incidence graph....",
-incidencegraph= zeros( (NumberOfWordsForAnalysis,len(context_list)) ) 
-for contextno in range(len(context_list)):
-	this_sum = 0.0
-	print contextno
-	for wordno in range(NumberOfWordsForAnalysis):
-		this_sum += len(from_word_to_context[analyzedwordlist[wordno] ])
-#---------------------------------------------------------------------------#
-#	Count context features shared by words
-#---------------------------------------------------------------------------#
+for focus_word, context, this_count in data_points:
+        if context_usage[context] < minimum_context_use:
+            continue
+        if simple_word_count_in_corpus[focus_word] < minimum_word_use:
+            continue
+        if context not in context_to_index:
+            index_value = len(context_to_index)
+            context_to_index[context] = index_value
+            index_to_context[index_value] = context
+            #print 189, context, context_usage[context]
+        if focus_word not in focus_word_to_index:
+            index_value = len(focus_word_to_index)
+            focus_word_to_index[focus_word] = index_value
+            index_to_focus_word[index_value] = focus_word
+        if focus_word not in focus_word_usage:
+            focus_word_usage[focus_word] = 0
+        focus_word_usage[focus_word] += 1
+            #print focus_word
+            
+        #print context, context_usage[context], 193
+           
+context_count = len(context_to_index)
+focus_word_count = len(focus_word_to_index)
 
-print "%-50s" % "4. Counting context features shared by words...",
-NearbyWords = zeros( (NumberOfWordsForAnalysis,NumberOfWordsForAnalysis) )
-count = 0 
-for context in contexts:
-	count += 1
-#	if count%10000 == 0:
-#		print count/10000, 
-	if len(contexts[context]) == 1:
-		continue
-	for word1 in contexts[context]:	 
-		w1 = analyzedworddict[word1]	
-		for word2 in contexts[context]: 
-			w2 = analyzedworddict[word2]
-			if not w1 == w2:		
-				NearbyWords[w1,w2] += 1
-print "Done.", count
-#---------------------------------------------------------------------------#
-#	Normalize.
-#---------------------------------------------------------------------------#
-print  "%-50s" % "5. Normalizing nearness measurements....",
-Diameter = defaultdict()
-count = 0
-for w1 in range(NumberOfWordsForAnalysis):
-	for w2 in range(NumberOfWordsForAnalysis):
-		if w1 == w2:
-			continue
-		if not w1 in Diameter:
-			Diameter[w1] = 0		 
-		Diameter[w1] += NearbyWords[w1,w2]
-		count += 1
-print "Done.", count
-#---------------------------------------------------------------------------#
-#	Incidence graph
-#---------------------------------------------------------------------------#
-print  "%-50s" %  "6. We compute the incidence graph....",
-incidencegraph= zeros( (NumberOfWordsForAnalysis,NumberOfWordsForAnalysis) )
-count = 0
-for w1 in range( NumberOfWordsForAnalysis ):
-	for w2 in range( NumberOfWordsForAnalysis ):
-		if w1 == w2:
-			incidencegraph[w1,w1] = Diameter[w1]
-		else:
-			incidencegraph[w1, w2] = NearbyWords[w1,w2]	
-			count += 1
+if context_count < NumberOfEigenvectors:
+    NumberOfEigenvectors = context_count
+    print "Number of eigenvectors changed to ", NumberOfEigenvectors
+ 
+print "Minimum context usage:", minimum_context_use
 
-print "Done.", count 
- 		 
-#---------------------------------------------------------------------------#
-#	Zero mean
-#---------------------------------------------------------------------------#
+ 
+print "Focus word count (types) = ", focus_word_count
+print "Context count (types) = ", context_count
 
 
+data = np.zeros((focus_word_count, context_count ))
 
-#---------------------------------------------------------------------------#
-#	Normalize the laplacian.
-#---------------------------------------------------------------------------#
-print  "%-50s" %  "7. We normalize the laplacian....",
-#Normalize the laplacian:
-count = 0
-mylaplacian = zeros((NumberOfWordsForAnalysis,NumberOfWordsForAnalysis) )
-for i in range(NumberOfWordsForAnalysis):
-	mylaplacian[i,i] = 1
-	for j in range(NumberOfWordsForAnalysis):
-		if not i == j:
-			if incidencegraph[i,j] == 0:
-				mylaplacian[i,j]=0
-			else:
-				mylaplacian[i,j] = -1 * incidencegraph[i,j]/ math.sqrt ( Diameter[i] * Diameter[j] )
-				count += 1		 	
-print "Done.", count 
+for word,context,count in data_points:
+    if context not in context_to_index:
+        continue
+    if word not in focus_word_to_index:
+        continue
+    data[focus_word_to_index[word],context_to_index[context]] = 1 #bad results when I put "count" there
+    #print word, context, 214
+print "Established data array."    
+print "outfile folder", outfilenameContexts
+
+for word  in focus_word_to_index:
+    print >>outfileContexts, word
+    for c in context_to_index:
+        if data[focus_word_to_index[word], context_to_index[c]] > 0:
+                print >>outfileContexts, "\t", c,  data[focus_word_to_index[word], context_to_index[c]]
+    print >>outfileContexts
+
+np.set_printoptions(edgeitems=15)
+        
+
  
 #---------------------------------------------------------------------------#
-#	Compute eigenvectors.
+#    Make zero-mean
 #---------------------------------------------------------------------------#
-print "%-50s" %  "8. Compute eigenvectors...",
-myeigenvalues, myeigenvectors = numpy.linalg.eigh(mylaplacian)
+
+data1 = np.zeros((focus_word_count, context_count))
+data2 = np.zeros((focus_word_count, context_count))
+normal_PCA = True 
+if (normal_PCA):
+        #for contexts
+        #print 226, data
+        data1 -= data - np.mean(data,axis=0)
+
+          
+        # for words
+        data2 = np.transpose(data)
+        #print data2
+        data2 -= np.mean(data2,axis=0)
+        #print data2
+
+#---------------------------------------------------------------------------#
+#    Non-negative matrix factorization.
+#---------------------------------------------------------------------------#
+
+M = spr.csr_matrix(data)
+    
+print "Established data array."    
+
+
+NNMF = False
+#V=np.zeros((focus_word_count, context_count))
+if NNMF:
+        nmf = nimfa.Nmf(data, seed=None, rank=10, max_iter=12, update='euclidean',
+                objective='fro')
+
+
+#---------------------------------------------------------------------------#
+#    Compute eigenvectors.
+#---------------------------------------------------------------------------#
+print   "8. Compute eigenvectors...",
+# Contexts...
+
+if (normal_PCA):
+    mycovar = np.matmul(np.transpose(data1),  data1)
+    myeigenvalues, myeigenvectors = np.linalg.eigh(mycovar)
+    print "Done."
+
+NNMF_nimfa = False
+if NNMF_nimfa:
+    
+    
+    #V = spr.csr_matrix([[1, 0, 2, 4], [0, 0, 6, 3], [4, 0, 5, 6]])
+    #print('Target:\n%s' % data.todense())
+
+    nmf = nimfa.Nmf(data, max_iter=200, rank=2, update='euclidean', objective='fro')
+    nmf_fit = nmf()
+    
+    W = nmf_fit.basis()
+    print('Basis matrix:\n%s' % W)
+    
+    H = nmf_fit.coef()
+    print('Mixture matrix:\n%s' % H)
+    
+    print('Euclidean distance: %5.3f' % nmf_fit.distance(metric='euclidean'))
+    
+    sm = nmf_fit.summary()
+    print('Sparseness Basis: %5.3f  Mixture: %5.3f' % (sm['sparseness'][0], sm['sparseness'][1]))
+    print('Iterations: %d' % sm['n_iter'])
+    #print('Target estimate:\n%s' % np.dot(W.todense(), H.todense()))
+        
+NNMF_sklearn = False
+if NNMF_sklearn == True:
+    
+    nmf = NMF( random_state=1,
+          beta_loss='kullback-leibler', solver='mu', max_iter=1000, alpha=.1,
+          l1_ratio=.5).fit(data)
+    
+    model = NMF()
+    W = model.fit_transform(data)
+    H = model.components_
+   
+    
+    
+if normal_PCA:  # regular pca, not non-negative...    
+    n, m = data1.shape
+    assert np.allclose(data1.mean(axis=0), np.zeros(m))
+    # Compute covariance matrix
+    C = np.dot(data1.T, data1) / (n-1)
+    # Eigen decomposition
+    myeigenvalues, myeigenvectors = np.linalg.eig(C)
+    # Project X onto PC space
+    #X_pca = np.dot(X, eigen_vecs)
+    #return X_pca
+
+
+ 
+print ("9. Printing contexts to latex file.")
+formatstr1 = '%20d  %15s %10.3f %5i'
+headerformatstr = '%20s  %15s %10.3f '
+print "Printing to ", outfolder
+print "Number of eigenvectors:", NumberOfEigenvectors
+print "Number of contexts", context_count
+if PrintEigenvectorsFlag:
+    for eigenno in range(NumberOfEigenvectors):
+        print "eigenno", eigenno
+        print >>outfileEigenvectors
+        print >>outfileEigenvectors,headerformatstr %("Eigenvector number", "context", myeigenvalues[eigenno])
+        print >>outfileEigenvectors,"_____________________________________________"
+        templist = list()        
+        for contextno in range(context_count):
+            templist.append((contextno, myeigenvectors[contextno,eigenno])) 
+            #print 347, contextno, "context no"
+        templist.sort(key = lambda second : second[1])
+        for i in range(context_count):
+            mypair = templist[i]
+            contextno = mypair[0]
+            eigenvalue = mypair[1]
+            context = index_to_context[contextno]
+            print >>outfileEigenvectors, formatstr1 %(eigenno, context, eigenvalue, context_usage[context])
+            #print formatstr %(eigenno, context, eigenvalue)
+#---------------------------------------------------------------------------#
+# Focus words...
+print "345 Compute product of data with itself transposed"   
+mycovar2 = np.matmul(data, np.transpose(data))
+print "347 compute eigenvectors"
+myeigenvalues2, myeigenvectors2 = np.linalg.eigh(mycovar2)
+print "349 computation of eigenvctors complete."
+
+
+n, m = data2.shape
+#print 342, data2
+assert np.allclose(data2.mean(axis=0), np.zeros(m))
+# Compute covariance matrix
+print "Before dot."
+C = np.dot(data2.T, data2) / (n-1)
+# Eigen decomposition
+myeigenvalues2, myeigenvectors2 = np.linalg.eig(C)
+print "Eigen computation finished."
+# Project X onto PC space
+#X_pca = np.dot(X, eigen_vecs)
+#return X_pca
+
+
+
+
+
+
 print "Done."
-
-formatstr = '%15d  %15s %10.3f'
  
-  
+print ("10. Printing words to latex file.")
+formatstr = '%20d  %15s %10.3f %10i'
+headerformatstr = '%20s  %15s %10.3f'
+print "Printing to ", outfolder
+
+if PrintEigenvectorsFlag:
+    for eigenno in range(NumberOfEigenvectors):
+        print >>outfileEigenvectors
+        print >>outfileEigenvectors,headerformatstr %("Eigenvector number", "word" , myeigenvalues2[eigenno])
+        print >>outfileEigenvectors,"_____________________________________________"
+        templist = list()        
+        for wordno in range(focus_word_count):
+	    #print wordno, index_to_focus_word[wordno]
+            templist.append((wordno, myeigenvectors2[wordno,eigenno]))            
+        templist.sort(key = lambda second : second[1])
+        for i in range(focus_word_count):
+            mypair = templist[i]
+            wordno = mypair[0]
+            eigenvalue = mypair[1]
+            word = index_to_focus_word[wordno]
+            print >>outfileEigenvectors, formatstr %(eigenno, word, eigenvalue, focus_word_usage[word])
+            #print eigenno, word, eigenvalue
 #---------------------------------------------------------------------------#
-#	Generate latex output.
-#---------------------------------------------------------------------------#
+
+
+outfileEigenvectors.close()
+
+
+
 if LatexFlag:
-	#Latex output
-	print >>outfileLatex, "%",  infileWordsname
-	print >>outfileLatex, "\\documentclass{article}" 
-	print >>outfileLatex, "\\usepackage{booktabs}" 
-	print >>outfileLatex, "\\begin{document}" 
+    #Latex output
+    print >>outfileLatex, "%",  infileWordsname
+    print >>outfileLatex, "\\documentclass{article}"
+    print >>outfileLatex, "\\usepackage{booktabs}"
+    print >>outfileLatex, "\\begin{document}"
 
 data = dict() # key is eigennumber, value is list of triples: (index, word, eigen^{th} coordinate) sorted by increasing coordinate
 print ("9. Printing contexts to latex file.")
 formatstr = '%20d  %15s %10.3f'
 headerformatstr = '%20s  %15s %10.3f'
 NumberOfWordsToDisplayForEachEigenvector = 20
-	
+
 # 2018
 
 # PUT THIS BACK IN
 #g = graph.graphxy(width=8)
 coordinates = list()
 
-for wordno in range(NumberOfWordsForAnalysis):
-	#print                     analyzedwordlist[wordno], myeigenvectors[wordno,0],myeigenvectors[wordno,1],myeigenvectors[wordno,2]
-	print >>eigencoordinates, analyzedwordlist[wordno], myeigenvectors[wordno,0],myeigenvectors[wordno,1],myeigenvectors[wordno,2]
-	coordinates.append((myeigenvectors[wordno,1],myeigenvectors[wordno,2]) )
-	
-eigencoordinates.close()
+
+
+
 
 #PUT THESE BACK IN
 #g.plot(graph.data.points(coordinates,x=1,y=2))
@@ -317,143 +443,36 @@ eigencoordinates.close()
 #g.writePDFfile(outfile_pdf)
 #outfile_eps.close()
 #outfile_pdf.close()
-
-print "Printing to ", outfolder 
-	 
-if PrintEigenvectorsFlag:
-
-	for eigenno in range(NumberOfEigenvectors):
-		print >>outfileEigenvectors
-		print >>outfileEigenvectors,headerformatstr %("Eigenvector number", "word" , myeigenvalues[eigenno])
-		print >>outfileEigenvectors,"_____________________________________________" 
-		for wordno in range(NumberOfWordsForAnalysis):
-			print >>outfileEigenvectors, formatstr %(eigenno, analyzedwordlist[wordno], myeigenvectors[wordno,eigenno])
-
+ 
+LatexFlag = False
 if LatexFlag:
-	for eigenno in range(NumberOfEigenvectors):
-		eigenlist=list()	
-		#data[eigenno] = list()
-		data = list()
-		for wordno in range (NumberOfWordsForAnalysis):		 
-			eigenlist.append( (wordno,myeigenvectors[wordno, eigenno]) )			
-		eigenlist.sort(key=lambda x:x[1])			
-		print >>outfileLatex			 
-		print >>outfileLatex, "Eigenvector number", eigenno, "\n" 
-		print >>outfileLatex, "\\begin{tabular}{lll}\\toprule"
-		print >>outfileLatex, " & word & coordinate \\\\ \\midrule "
+    for eigenno in range(NumberOfEigenvectors):
+        eigenlist=list()
+        #data[eigenno] = list()
+        data = list()
+        #for wordno in range (NumberOfWordsForAnalysis):
+        #    eigenlist.append( (wordno,myeigenvectors[wordno, eigenno]) )
+        eigenlist.sort(key=lambda x:x[1])
+        print >>outfileLatex
+        print >>outfileLatex, "Eigenvector number", eigenno, "\n"
+        print >>outfileLatex, "\\begin{tabular}{lll}\\toprule"
+        print >>outfileLatex, " & word & coordinate \\\\ \\midrule "
 
-		for i in range(NumberOfWordsForAnalysis):			 
-			word = analyzedwordlist[eigenlist[i][0]]
-			coord =  eigenlist[i][1]
-			if i < NumberOfWordsToDisplayForEachEigenvector or i > NumberOfWordsForAnalysis - NumberOfWordsToDisplayForEachEigenvector:
-				data.append((i, word , coord ))
-		
-				#for eigenno in data.keys():
-				
-		for (i, word, coord) in data:
-			if word == "&":
-				word = "\&" 
-			print >>outfileLatex,  "%5d & %10s &  %10.3f \\\\" % (i, word, coord) 
-
-		print >>outfileLatex, "\\bottomrule \n \\end{tabular}", "\n\n"
-		print >>outfileLatex, "\\newpage" 
-print >>outfileLatex, "\\end{document}" 
-#---------------------------------------------------------------------------#
-#	Finding coordinates in space of low dimensionality
-#---------------------------------------------------------------------------#
-print "10. Finding coordinates in space of low dimensionality."
  
-coordinates 		= dict()
-wordsdistance 		= dict()
-closestNeighbors 	= dict() #a dict whose values are lists; the lists are the closest words to the key.
- 
-thislist = list() 
- 
-for wordno in range(NumberOfWordsForAnalysis):
-	coordinates[wordno]= list() 
-	for eigenno in range (1,NumberOfEigenvectors):
-		coordinates[wordno].append ( myeigenvectors[ wordno, eigenno ] )
-
-for wordno1 in range(NumberOfWordsForAnalysis):	 
-
-	word = analyzedwordlist[wordno1]
- 
-       	wordsdistance[word] = list()
-
-	for wordno2 in range (NumberOfWordsForAnalysis):		 
-		distance = 0
-		for coordno in range(NumberOfEigenvectors-1):
-			x = coordinates[wordno1][coordno] - coordinates[wordno2][coordno]
-			distance += abs(x * x * x)		 
-                wordsdistance[word].append((wordno2,distance))		 
- 
-
-
+        print >>outfileLatex, "\\bottomrule \n \\end{tabular}", "\n\n"
+        print >>outfileLatex, "\\newpage"
+print >>outfileLatex, "\\end{document}"
 
 #---------------------------------------------------------------------------#
-#	 Finding closest neighbors on the manifold's approximation
+#     Print contexts shared by nearby words
 #---------------------------------------------------------------------------#
 
-print "11. Finding closest neighbors on the manifold('s approximation)."
-		 
-for wordno1 in range(NumberOfWordsForAnalysis): 
-    
-	word1 = analyzedwordlist[wordno1]		
-	if not word1 in closestNeighbors:
-		closestNeighbors[word1] = list()
-	wordsdistance[word1].sort(key=lambda x:x[1])     
-	print >>outfileNeighbors, word1,
-	count = 0
- 
-
- 	for (wordno2, distance) in wordsdistance[word1]:		 
-		if wordno1 == wordno2:			 
-			continue			
-		count += 1
-		word2 = analyzedwordlist[wordno2]	 
-		print >>outfileNeighbors, word2, 
-		closestNeighbors[word1].append(word2)	 	 
-		if count >= NumberOfNeighbors:
-			break
-	print >>outfileNeighbors
-
-outfileNeighbors.close()
-
-#---------------------------------------------------------------------------#
-#	 Print contexts shared by nearby words
-#---------------------------------------------------------------------------#
-numberperrow= 5
-for word in analyzedwordlist:
-	print >>outfileContexts,"\n", word,"\n\t",
-	number = 1
-	if (False):
-		for context in from_word_to_context[word]:
-			if len(contexts[context]) >100:
-				print >>outfileContexts, "%-25s %3d " % ( context, len(contexts[context])),
-				number += 1
-				if number == numberperrow:
-					number = 1
-					print >>outfileContexts, "\n\t",
-	these_contexts = set( from_word_to_context[word] )
-	for word2 in closestNeighbors[word]:
-		print >>outfileContexts, word2
-		these_contexts.intersection( set(from_word_to_context[word2]))
-	for context in these_contexts: 	
-		if len(contexts[context]) >100:
-			print >>outfileContexts, "%-25s %3d " % ( context, len(contexts[context])),
-			number += 1
-			if number == numberperrow:
-				number = 1
-				print >>outfileContexts, "\n\t",
- 
 print "Exiting successfully."
 
-#os.popen("latex " + outfilenameLatex ) 
-
 if PrintEigenvectorsFlag:
-	outfileEigenvectors.close()
+    outfileEigenvectors.close()
 outfileNeighbors.close()
- 
+
 
 
 
