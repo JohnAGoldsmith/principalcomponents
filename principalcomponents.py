@@ -23,6 +23,10 @@ from sklearn.decomposition import NMF
 
 GraphicsFlag = False
 
+
+
+
+
 #-----------------------------------------------------------------------#
 #                                    #
 #    This program takes a trigram file and a word list        #
@@ -31,6 +35,131 @@ GraphicsFlag = False
 #                                    #
 #-----------------------------------------------------------------------#
 
+def from_data_points_to_focus_words_and_contexts(data_points):
+        for (focus_word, context, this_count) in data_points:
+                if context_usage[context] < minimum_context_use:
+                    continue
+                if simple_word_count_in_corpus[focus_word] < minimum_word_use:
+                    continue
+                if context not in context_to_index:
+                    index_value = len(context_to_index)
+                    context_to_index[context] = index_value
+                    index_to_context[index_value] = context
+                    #print 189, context, context_usage[context]
+                if focus_word not in focus_word_to_index:
+                    index_value = len(focus_word_to_index)
+                    focus_word_to_index[focus_word] = index_value
+                    index_to_focus_word[index_value] = focus_word
+                if focus_word not in focus_word_usage:
+                    focus_word_usage[focus_word] = 0
+                focus_word_usage[focus_word] += 1
+                    #print focus_word
+                    
+                #print context, context_usage[context], 193
+                   
+        context_count = len(context_to_index)
+        focus_word_count = len(focus_word_to_index)
+        #print 62, context_count, focus_word_count
+        return context_count, focus_word_count
+        
+        
+        
+        
+
+def from_data_points_list_to_data_array(data,datapoints):     
+        #print 227, focus_word_count, context_count
+        for word,context,count in data_points:
+            if context not in context_to_index:
+                continue
+            if word not in focus_word_to_index:
+                continue
+            #print word, context
+            data[focus_word_to_index[word],context_to_index[context]] = 1 #bad results when I put "count" there
+            #print word, context, 214
+        print "   Established data array."    
+        print "   outfile folder", outfilename_word_to_contexts
+
+
+#def print_contexts(outfileContexts, data):
+ 
+            
+def print_contexts_to_words(outfile,data):   
+        contexts = context_to_index.keys()
+        contexts.sort()
+        for context  in contexts:
+            temp_word_list = list()        
+            print >>outfile, context
+            for word in focus_word_to_index:
+                if data[focus_word_to_index[word], context_to_index[context]] > 0:
+#                        print >>outfile, "\t", word,  data[focus_word_to_index[word], context_to_index[context]]
+                        temp_word_list.append(word)
+                temp_word_list.sort()
+            for word in temp_word_list:
+                print >>outfile, "\t", word, data[focus_word_to_index[word], context_to_index[context]]
+            print >>outfile
+
+def print_words_to_contexts(outfile, data):
+        temp_words = focus_word_to_index.keys()
+        temp_words.sort()
+        for word  in temp_words:
+            templist = list()
+            print >>outfile, word
+            for context in context_to_index:
+                if data[focus_word_to_index[word], context_to_index[context]] > 0:
+                        templist.append(context)
+            templist.sort()
+            for context in templist:
+                  print >>outfile, "\t", context,  data[focus_word_to_index[word], context_to_index[context]]
+            print >>outfile
+
+         
+
+def print_eigenvectors_of_contexts_to_file(outfileEigenvectors, myeigenvectors, myeigenvalues):
+        print ("---Printing contexts to latex file.")
+        formatstr1 = '%20d  %15s %10.3f %5i'
+        headerformatstr = '%20s  %15s %10.3f '
+        print "   Printing to ", outfolder
+        print "   Number of eigenvectors:", NumberOfEigenvectors
+        print "   Number of contexts", context_count
+        if PrintEigenvectorsFlag:
+            for eigenno in range(NumberOfEigenvectors):
+                #print "  eigenno", eigenno
+                print >>outfileEigenvectors
+                print >>outfileEigenvectors,headerformatstr %("Eigenvector number", "context", myeigenvalues[eigenno])
+                print >>outfileEigenvectors,"_____________________________________________"
+                templist = list()        
+                for contextno in range(context_count):
+                    templist.append((contextno, myeigenvectors[contextno,eigenno])) 
+                    #print 347, contextno, "context no"
+                templist.sort(key = lambda second : second[1])
+                for i in range(context_count):
+                    mypair = templist[i]
+                    contextno = mypair[0]
+                    eigenvalue = mypair[1]
+                    context = index_to_context[contextno]
+                    print >>outfileEigenvectors, formatstr1 %(eigenno, context, eigenvalue, context_usage[context])
+                    #print formatstr %(eigenno, context, eigenvalue)
+            
+def NNMF():
+    #V = spr.csr_matrix([[1, 0, 2, 4], [0, 0, 6, 3], [4, 0, 5, 6]])
+    #print('Target:\n%s' % data.todense())
+
+    nmf = nimfa.Nmf(data, max_iter=200, rank=2, update='euclidean', objective='fro')
+    nmf_fit = nmf()
+    
+    W = nmf_fit.basis()
+    print('Basis matrix:\n%s' % W)
+    
+    H = nmf_fit.coef()
+    print('Mixture matrix:\n%s' % H)
+    
+    print('Euclidean distance: %5.3f' % nmf_fit.distance(metric='euclidean'))
+    
+    sm = nmf_fit.summary()
+    print('Sparseness Basis: %5.3f  Mixture: %5.3f' % (sm['sparseness'][0], sm['sparseness'][1]))
+    print('Iterations: %d' % sm['n_iter'])
+    #print('Target estimate:\n%s' % np.dot(W.todense(), H.todense()))
+         
 #---------------------------------------------------------------------------#
 #    Variables to be changed by user
 #---------------------------------------------------------------------------#
@@ -55,7 +184,7 @@ NumberOfEigenvectors         = 20
 NumberOfWordsForAnalysis    = 500 #4000
 NumberOfNeighbors          = 9
 
-punctuation         = " $/+.,;:?!()\"[]"
+punctuation         = " $/+.,;:?!()\"[];        "
 
 
 
@@ -66,10 +195,12 @@ punctuation         = " $/+.,;:?!()\"[]"
 
 infileTrigramsname = trigramfolder + languagename + "_trigrams.txt"
 infileWordsname = wordfolder + languagename + ".dx1"
-outfilenameEigenvectors = outfolder + languagename + "_PoS_words_eigenvectors" + ".txt"
+outfilename_word_eigenvectors = outfolder + languagename + "_word_eigenvectors" + ".txt"
+outfilename_context_eigenvectors = outfolder + languagename + "_context_eigenvectors" + ".txt"
 outfilenameNeighbors = outfolder + languagename + "_PoS_closest" + "_" + str(NumberOfNeighbors ) + "_neighbors.txt"
 outfilenameLatex = outfolder + languagename + "_latex.tex"
-outfilenameContexts = outfolder + languagename + "_contexts.txt"
+outfilename_word_to_contexts = outfolder + languagename + "_focus_word_to_contexts.txt"
+outfilename_context_to_words = outfolder + languagename + "_context_to_words.txt"
 outfilenameEigenCoordinates = outfolder + languagename + "_eigen_coordinates.txt"
 
 print ("\n\nI am looking for a trigrams file name: ", infileTrigramsname)
@@ -94,11 +225,12 @@ if unicodeFlag:
     outfileNeighbors    = codecs.open (outfileneighborsname, "w",encoding = FileEncoding)
 
 else:
-    if PrintEigenvectorsFlag:
-        outfileEigenvectors = open (outfilenameEigenvectors, "w")
+    outfile_word_eigenvectors = open (outfilename_word_eigenvectors, "w")
+    outfile_context_eigenvectors = open (outfilename_context_eigenvectors, "w")
     outfileNeighbors    = open (outfilenameNeighbors, "w")
     outfileLatex         = open (outfilenameLatex, "w")
-    outfileContexts     = open (outfilenameContexts, "w")
+    outfile_words_to_contexts     = open (outfilename_word_to_contexts, "w")
+    outfile_context_to_words = open (outfilename_context_to_words, "w")
     eigencoordinates     = open (outfilenameEigenCoordinates, "w")
 
     wordfile        = open(infileWordsname)
@@ -107,8 +239,11 @@ else:
 print "Language is", languagename +"."
 print "File name:", languagename+ "."
 
-if PrintEigenvectorsFlag:
-    print >>outfileEigenvectors,"#", \
+print >>outfile_word_eigenvectors,"#", \
+            languagename, "\n#", \
+            "Number of words analyzed", NumberOfWordsForAnalysis,"\n#", \
+            "Number of neighbors identified", NumberOfNeighbors, "\n#","\n#"
+print >>outfile_context_eigenvectors,"#", \
             languagename, "\n#", \
             "Number of words analyzed", NumberOfWordsForAnalysis,"\n#", \
             "Number of neighbors identified", NumberOfNeighbors, "\n#","\n#"
@@ -165,78 +300,37 @@ if True:
         else:
             simple_word_count_in_corpus[focus_word] += 1
         
-    print "Number of trigrams obtained: ", len(data_points)
+    print "   Number of trigrams obtained: ", len(data_points)
 
-
-# row_number    : word_index
-# column_number : context_index
-# data          : count
-
- 
-
- 
 word_index = np.zeros((len(data_points)))
 context_index = np.zeros((len(data_points)))
 focus_word_usage = dict()
+context_count = 0
+focus_word_count = 0
 
-for focus_word, context, this_count in data_points:
-        if context_usage[context] < minimum_context_use:
-            continue
-        if simple_word_count_in_corpus[focus_word] < minimum_word_use:
-            continue
-        if context not in context_to_index:
-            index_value = len(context_to_index)
-            context_to_index[context] = index_value
-            index_to_context[index_value] = context
-            #print 189, context, context_usage[context]
-        if focus_word not in focus_word_to_index:
-            index_value = len(focus_word_to_index)
-            focus_word_to_index[focus_word] = index_value
-            index_to_focus_word[index_value] = focus_word
-        if focus_word not in focus_word_usage:
-            focus_word_usage[focus_word] = 0
-        focus_word_usage[focus_word] += 1
-            #print focus_word
-            
-        #print context, context_usage[context], 193
-           
-context_count = len(context_to_index)
-focus_word_count = len(focus_word_to_index)
+#------------------------------------------
+context_count, focus_word_count = from_data_points_to_focus_words_and_contexts(data_points)
+#------------------------------------------
 
 if context_count < NumberOfEigenvectors:
     NumberOfEigenvectors = context_count
-    print "Number of eigenvectors changed to ", NumberOfEigenvectors
+    print "   Number of eigenvectors changed to ", NumberOfEigenvectors
  
-print "Minimum context usage:", minimum_context_use
-
- 
-print "Focus word count (types) = ", focus_word_count
-print "Context count (types) = ", context_count
-
+print "   Minimum context usage:", minimum_context_use
+print "   Focus word count (types) = ", focus_word_count
+print "   Context count (types) = ", context_count
 
 data = np.zeros((focus_word_count, context_count ))
+from_data_points_list_to_data_array(data,datapoints)
 
-for word,context,count in data_points:
-    if context not in context_to_index:
-        continue
-    if word not in focus_word_to_index:
-        continue
-    data[focus_word_to_index[word],context_to_index[context]] = 1 #bad results when I put "count" there
-    #print word, context, 214
-print "Established data array."    
-print "outfile folder", outfilenameContexts
-
-for word  in focus_word_to_index:
-    print >>outfileContexts, word
-    for c in context_to_index:
-        if data[focus_word_to_index[word], context_to_index[c]] > 0:
-                print >>outfileContexts, "\t", c,  data[focus_word_to_index[word], context_to_index[c]]
-    print >>outfileContexts
+#------------------------------------------
+#print_contexts(outfile_word_to_contexts, data)
+print_contexts_to_words(outfile_context_to_words,data)
+print_words_to_contexts(outfile_words_to_contexts,data)
+#------------------------------------------
 
 np.set_printoptions(edgeitems=15)
         
-
- 
 #---------------------------------------------------------------------------#
 #    Make zero-mean
 #---------------------------------------------------------------------------#
@@ -255,56 +349,51 @@ if (normal_PCA):
         #print data2
         data2 -= np.mean(data2,axis=0)
         #print data2
-
+print "  Established data array."    
 #---------------------------------------------------------------------------#
 #    Non-negative matrix factorization.
 #---------------------------------------------------------------------------#
 
 M = spr.csr_matrix(data)
-    
-print "Established data array."    
-
-
 NNMF = False
 #V=np.zeros((focus_word_count, context_count))
+#---------------------------------------------------------------------------#
 if NNMF:
         nmf = nimfa.Nmf(data, seed=None, rank=10, max_iter=12, update='euclidean',
                 objective='fro')
+#---------------------------------------------------------------------------#
+
+
 
 
 #---------------------------------------------------------------------------#
 #    Compute eigenvectors.
 #---------------------------------------------------------------------------#
-print   "8. Compute eigenvectors...",
+print   "2. Compute eigenvectors for contexts.",
 # Contexts...
 
-if (normal_PCA):
+if (False):
     mycovar = np.matmul(np.transpose(data1),  data1)
     myeigenvalues, myeigenvectors = np.linalg.eigh(mycovar)
     print "Done."
 
+
+    
+if normal_PCA:  # regular pca, not non-negative...    
+    n, m = data1.shape
+    assert np.allclose(data1.mean(axis=0), np.zeros(m))
+    C = np.dot(data1.T, data1) / (n-1) #this computes the covariance matrix
+    myeigenvalues, myeigenvectors = np.linalg.eig(C)
+    # Project X onto PC space
+    X_pca = np.dot(data1, myeigenvectors)
+    #return X_pca
+
+print_eigenvectors_of_contexts_to_file(outfile_context_eigenvectors, myeigenvectors, myeigenvalues)
+
+
 NNMF_nimfa = False
 if NNMF_nimfa:
-    
-    
-    #V = spr.csr_matrix([[1, 0, 2, 4], [0, 0, 6, 3], [4, 0, 5, 6]])
-    #print('Target:\n%s' % data.todense())
-
-    nmf = nimfa.Nmf(data, max_iter=200, rank=2, update='euclidean', objective='fro')
-    nmf_fit = nmf()
-    
-    W = nmf_fit.basis()
-    print('Basis matrix:\n%s' % W)
-    
-    H = nmf_fit.coef()
-    print('Mixture matrix:\n%s' % H)
-    
-    print('Euclidean distance: %5.3f' % nmf_fit.distance(metric='euclidean'))
-    
-    sm = nmf_fit.summary()
-    print('Sparseness Basis: %5.3f  Mixture: %5.3f' % (sm['sparseness'][0], sm['sparseness'][1]))
-    print('Iterations: %d' % sm['n_iter'])
-    #print('Target estimate:\n%s' % np.dot(W.todense(), H.todense()))
+    NNMF()
         
 NNMF_sklearn = False
 if NNMF_sklearn == True:
@@ -318,83 +407,41 @@ if NNMF_sklearn == True:
     H = model.components_
    
     
-    
-if normal_PCA:  # regular pca, not non-negative...    
-    n, m = data1.shape
-    assert np.allclose(data1.mean(axis=0), np.zeros(m))
-    # Compute covariance matrix
-    C = np.dot(data1.T, data1) / (n-1)
-    # Eigen decomposition
-    myeigenvalues, myeigenvectors = np.linalg.eig(C)
-    # Project X onto PC space
-    #X_pca = np.dot(X, eigen_vecs)
-    #return X_pca
 
-
- 
-print ("9. Printing contexts to latex file.")
-formatstr1 = '%20d  %15s %10.3f %5i'
-headerformatstr = '%20s  %15s %10.3f '
-print "Printing to ", outfolder
-print "Number of eigenvectors:", NumberOfEigenvectors
-print "Number of contexts", context_count
-if PrintEigenvectorsFlag:
-    for eigenno in range(NumberOfEigenvectors):
-        print "eigenno", eigenno
-        print >>outfileEigenvectors
-        print >>outfileEigenvectors,headerformatstr %("Eigenvector number", "context", myeigenvalues[eigenno])
-        print >>outfileEigenvectors,"_____________________________________________"
-        templist = list()        
-        for contextno in range(context_count):
-            templist.append((contextno, myeigenvectors[contextno,eigenno])) 
-            #print 347, contextno, "context no"
-        templist.sort(key = lambda second : second[1])
-        for i in range(context_count):
-            mypair = templist[i]
-            contextno = mypair[0]
-            eigenvalue = mypair[1]
-            context = index_to_context[contextno]
-            print >>outfileEigenvectors, formatstr1 %(eigenno, context, eigenvalue, context_usage[context])
-            #print formatstr %(eigenno, context, eigenvalue)
 #---------------------------------------------------------------------------#
 # Focus words...
-print "345 Compute product of data with itself transposed"   
-mycovar2 = np.matmul(data, np.transpose(data))
-print "347 compute eigenvectors"
-myeigenvalues2, myeigenvectors2 = np.linalg.eigh(mycovar2)
-print "349 computation of eigenvctors complete."
+print   "2. Compute eigenvectors for words..."
 
+mycovar2 = np.matmul(data, np.transpose(data))
+myeigenvalues2, myeigenvectors2 = np.linalg.eigh(mycovar2)  # compute eigenvectors
+
+
+print "  Eigenvectors for words complete."
 
 n, m = data2.shape
 #print 342, data2
 assert np.allclose(data2.mean(axis=0), np.zeros(m))
-# Compute covariance matrix
-print "Before dot."
-C = np.dot(data2.T, data2) / (n-1)
-# Eigen decomposition
-myeigenvalues2, myeigenvectors2 = np.linalg.eig(C)
-print "Eigen computation finished."
+
+Covariance_matrix = np.dot(data2.T, data2) / (n-1) 
+myeigenvalues2, myeigenvectors2 = np.linalg.eig(Covariance_matrix)
+print "  Eigen computation finished."
+
+
 # Project X onto PC space
 #X_pca = np.dot(X, eigen_vecs)
 #return X_pca
-
-
-
-
-
-
-print "Done."
+print "   Done."
  
 print ("10. Printing words to latex file.")
 formatstr = '%20d  %15s %10.3f %10i'
 headerformatstr = '%20s  %15s %10.3f'
-print "Printing to ", outfolder
+print "   Printing to ", outfolder
 
 if PrintEigenvectorsFlag:
     for eigenno in range(NumberOfEigenvectors):
-        print >>outfileEigenvectors
-        print >>outfileEigenvectors,headerformatstr %("Eigenvector number", "word" , myeigenvalues2[eigenno])
-        print >>outfileEigenvectors,"_____________________________________________"
+        print >>outfile_word_eigenvectors
+        print >>outfile_word_eigenvectors,headerformatstr %("Eigenvector number", "word" , myeigenvalues2[eigenno])
+        print >>outfile_word_eigenvectors,"_____________________________________________"
         templist = list()        
         for wordno in range(focus_word_count):
 	    #print wordno, index_to_focus_word[wordno]
@@ -405,13 +452,13 @@ if PrintEigenvectorsFlag:
             wordno = mypair[0]
             eigenvalue = mypair[1]
             word = index_to_focus_word[wordno]
-            print >>outfileEigenvectors, formatstr %(eigenno, word, eigenvalue, focus_word_usage[word])
+            print >>outfile_word_eigenvectors, formatstr %(eigenno, word, eigenvalue, focus_word_usage[word])
             #print eigenno, word, eigenvalue
 #---------------------------------------------------------------------------#
 
 
-outfileEigenvectors.close()
-
+outfile_word_eigenvectors.close()
+outfile_context_eigenvectors.close()
 
 
 if LatexFlag:
@@ -469,8 +516,8 @@ print >>outfileLatex, "\\end{document}"
 
 print "Exiting successfully."
 
-if PrintEigenvectorsFlag:
-    outfileEigenvectors.close()
+outfile_context_eigenvectors.close()
+outfile_word_eigenvectors.close()
 outfileNeighbors.close()
 
 
