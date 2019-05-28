@@ -13,6 +13,14 @@ import scipy.sparse as spr
 
 from sklearn.decomposition import PCA
 from sklearn.decomposition import NMF
+
+
+import matplotlib as plt
+from graphics import *
+import matplotlib
+ 
+
+
 #import nimfa
 
 #from scipy.sparse.linalg import svds
@@ -23,7 +31,11 @@ from sklearn.decomposition import NMF
 
 GraphicsFlag = False
 
-
+#minimum_number_of_words_in_each_context = 3  #aka context_usage
+minimum_context_use = 10
+minimum_word_use = 10
+minimum_context_use = 1
+minimum_word_use = 1
 
 
 
@@ -36,31 +48,73 @@ GraphicsFlag = False
 #-----------------------------------------------------------------------#
 
 def from_data_points_to_focus_words_and_contexts(data_points):
-        for (focus_word, context, this_count) in data_points:
-                if context_usage[context] < minimum_context_use:
+        #sorted_word_list = list()
+        temp_data_list = list()
+        temp_word_list = list()
+        focus_word_count_in_triples = dict()
+        minimum_triple_use = 10
+        minimum_focus_word_use = 10
+        
+        
+        # eliminate triples with low counts; make temp data-list; 
+        for this_triple in data_points:
+                focus_word = this_triple[0]
+                context = this_triple[1]
+                count = this_triple[2]
+                
+                if count < minimum_triple_use:
                     continue
-                if simple_word_count_in_corpus[focus_word] < minimum_word_use:
+                if focus_word_corpus_count[focus_word] < minimum_focus_word_use:
                     continue
-                if context not in context_to_index:
-                    index_value = len(context_to_index)
-                    context_to_index[context] = index_value
-                    index_to_context[index_value] = context
-                    #print 189, context, context_usage[context]
-                if focus_word not in focus_word_to_index:
-                    index_value = len(focus_word_to_index)
-                    focus_word_to_index[focus_word] = index_value
-                    index_to_focus_word[index_value] = focus_word
-                if focus_word not in focus_word_usage:
-                    focus_word_usage[focus_word] = 0
-                focus_word_usage[focus_word] += 1
-                    #print focus_word
-                    
-                #print context, context_usage[context], 193
-                   
-        context_count = len(context_to_index)
-        focus_word_count = len(focus_word_to_index)
-        #print 62, context_count, focus_word_count
-        return context_count, focus_word_count
+                temp_data_list.append(this_triple)
+
+        
+        # sort data points by their count
+        data_points = sorted(temp_data_list, key = lambda x:x[2],reverse=True)
+        # sort focus-words by their appearance in different contexts.
+        #focus_words = sorted(focus_word_count_in_triples, key = lambda x:focus_word_count_in_triples, reverse=True)
+        
+        
+ 
+        
+        if focus_word not in focus_word_count_in_triples:
+            focus_word_count_in_triples[focus_word] = 1
+        else:
+            focus_word_count_in_triples[focus_word] += 1
+        
+        
+        temp_contexts = dict()
+        temp_focus_words = dict()
+        focus_words_list  = list()
+        for this_triple in data_points:
+            focus_word = this_triple[0]
+            context = this_triple[1]
+            count = this_triple[2]      
+            
+            if context not in temp_contexts:
+                    temp_contexts[context] = 0
+            temp_contexts[context] += 1
+            
+            if focus_word not in temp_focus_words:
+                    temp_focus_words[focus_word]= 0
+            temp_focus_words[focus_word] += 1
+ 
+        focus_words_list = sorted(temp_focus_words.keys(),key = lambda x : temp_focus_words[x],reverse=True )  
+        i = 0
+        for word in focus_words_list:
+            focus_word_to_index[word] = i
+            index_to_focus_word[i] = word
+            
+            i += 1
+            
+        context_list = sorted(temp_contexts.keys(),key = lambda x:temp_contexts[x], reverse=True )
+        i = 0
+        for context in context_list:
+            context_to_index[context] = i
+            index_to_context[i] = context
+            i+=1
+            #print i, context
+        return  data_points
         
         
         
@@ -86,9 +140,11 @@ def from_data_points_list_to_data_array(data,datapoints):
 def print_contexts_to_words(outfile,data):   
         contexts = context_to_index.keys()
         contexts.sort()
+        print 143
         for context  in contexts:
             temp_word_list = list()        
             print >>outfile, context
+            #print 146, context
             for word in focus_word_to_index:
                 if data[focus_word_to_index[word], context_to_index[context]] > 0:
 #                        print >>outfile, "\t", word,  data[focus_word_to_index[word], context_to_index[context]]
@@ -101,6 +157,7 @@ def print_contexts_to_words(outfile,data):
 def print_words_to_contexts(outfile, data):
         temp_words = focus_word_to_index.keys()
         temp_words.sort()
+        print 160
         for word  in temp_words:
             templist = list()
             print >>outfile, word
@@ -137,7 +194,8 @@ def print_eigenvectors_of_contexts_to_file(outfileEigenvectors, myeigenvectors, 
                     contextno = mypair[0]
                     eigenvalue = mypair[1]
                     context = index_to_context[contextno]
-                    print >>outfileEigenvectors, formatstr1 %(eigenno, context, eigenvalue, context_usage[context])
+                    #print 197, contextno, context, eigenvalue, contextno
+                    print >>outfileEigenvectors, formatstr1 %(eigenno, context, eigenvalue, context_corpus_count[context])
                     #print formatstr %(eigenno, context, eigenvalue)
             
 def NNMF():
@@ -160,9 +218,18 @@ def NNMF():
     print('Iterations: %d' % sm['n_iter'])
     #print('Target estimate:\n%s' % np.dot(W.todense(), H.todense()))
          
+def keytest(x):
+    return focus_word_count[x]
+def datapointtest(x):
+    return 9
+         
 #---------------------------------------------------------------------------#
 #    Variables to be changed by user
 #---------------------------------------------------------------------------#
+
+
+
+
 LatexFlag = True
 PrintEigenvectorsFlag = True
 unicodeFlag = False
@@ -171,6 +238,7 @@ FileEncoding =  "ascii"
 datafilelocation     =  "../../../data/"
 languagename     = "english-browncorpus"
 languagename = "english-encarta"
+#languagename = "english-toydata"
 
 wordfolder = datafilelocation + languagename + "/dx1/"
 trigramfolder = datafilelocation + languagename + "/ngrams/"
@@ -180,8 +248,8 @@ outfile_eps         = outfolder + "dx2_files/results/" + languagename + ".eps"
 outfile_pdf         = outfolder + "dx2_files/results/" + languagename + ".pdf"
 
 #NumberOfWordsForContext     = 1000 # 40000
-NumberOfEigenvectors         = 20
-NumberOfWordsForAnalysis    = 500 #4000
+NumberOfEigenvectors         = 10
+NumberOfWordsForAnalysis    = 100 #4000
 NumberOfNeighbors          = 9
 
 punctuation         = " $/+.,;:?!()\"[];        "
@@ -197,7 +265,7 @@ infileTrigramsname = trigramfolder + languagename + "_trigrams.txt"
 infileWordsname = wordfolder + languagename + ".dx1"
 outfilename_word_eigenvectors = outfolder + languagename + "_word_eigenvectors" + ".txt"
 outfilename_context_eigenvectors = outfolder + languagename + "_context_eigenvectors" + ".txt"
-outfilenameNeighbors = outfolder + languagename + "_PoS_closest" + "_" + str(NumberOfNeighbors ) + "_neighbors.txt"
+outfilenameNeighbors = outfolder + languagename + "_PoS_closest" + " _" + str(NumberOfNeighbors ) + "_neighbors.txt"
 outfilenameLatex = outfolder + languagename + "_latex.tex"
 outfilename_word_to_contexts = outfolder + languagename + "_focus_word_to_contexts.txt"
 outfilename_context_to_words = outfolder + languagename + "_context_to_words.txt"
@@ -258,17 +326,21 @@ print >>outfileNeighbors, "#", \
 #    Read trigram file
 #---------------------------------------------------------------------------#
 total_word_count = 0
-simple_word_count_in_corpus = dict()
+
+focus_word_corpus_count = dict()
 focus_word_to_index = dict()
 index_to_focus_word = dict()
+
+context_corpus_count = dict()
+context_to_count_of_distinct_focus_words = dict()
 context_to_index = dict()
 index_to_context = dict()
-context_usage = dict()
+
+
 datapoints = np.zeros(( ))
 
-#minimum_number_of_words_in_each_context = 3  #aka context_usage
-minimum_context_use = 100
-minimum_word_use = 200
+ 
+
 
 if True:
 
@@ -283,34 +355,38 @@ if True:
             continue
         context1 = line[0]
         context2 = line[2]
-        punctuation = ",.()_"
+        punctuation = ",.()_;"
+        
         if context1 in punctuation or context2 in punctuation:
             continue
         focus_word = line[1]
         if focus_word in punctuation:
             continue
-        this_count = int(line[3])
-        context = line[0] + " _ " +  line[2]
-        if not context in context_usage:
-            context_usage[context] = 0
-        context_usage[context] += 1
-        data_points.append((focus_word,context,this_count ))
-        if focus_word not in simple_word_count_in_corpus:
-            simple_word_count_in_corpus[focus_word] = 1
-        else:
-            simple_word_count_in_corpus[focus_word] += 1
+        this_count = int(line[3])        
+        context = line[0] + " _ " +  line[2]   
+
+        if focus_word not in focus_word_corpus_count:
+            focus_word_corpus_count[focus_word] = 0
+        focus_word_corpus_count[focus_word] += 1
         
-    print "   Number of trigrams obtained: ", len(data_points)
+        if context not in context_corpus_count:
+                context_corpus_count[context] =0
+        context_corpus_count[context] += 1
+        
+        data_points.append((focus_word,context,this_count ))
+
+print "  Raw count of trigrams obtained: ", len(data_points)
 
 word_index = np.zeros((len(data_points)))
 context_index = np.zeros((len(data_points)))
-focus_word_usage = dict()
-context_count = 0
-focus_word_count = 0
-
+ 
+print 370, "number of data points", len(data_points)
 #------------------------------------------
-context_count, focus_word_count = from_data_points_to_focus_words_and_contexts(data_points)
+data_points = from_data_points_to_focus_words_and_contexts(data_points)
+print 372, "number of data points", len(data_points)
 #------------------------------------------
+context_count = len(context_to_index)
+focus_word_count = len(focus_word_to_index)
 
 if context_count < NumberOfEigenvectors:
     NumberOfEigenvectors = context_count
@@ -322,6 +398,39 @@ print "   Context count (types) = ", context_count
 
 data = np.zeros((focus_word_count, context_count ))
 from_data_points_list_to_data_array(data,datapoints)
+
+
+win = GraphWin("Contexts", 3400, 2800)
+xscale = 10
+xmargin = 30
+yscale = 10
+ymargin = 20
+radius = 5
+for focus_word,  context, this_count in data_points:
+    #print 346, focus_word, context
+    #pr1int focus_word, focus_word_to_index[focus_word], 346\]
+    
+    
+    
+    win.plot(xscale*focus_word_to_index[focus_word]+xmargin,yscale*context_to_index[context]+ymargin,"red")
+    acircle = Circle(Point(focus_word_to_index[focus_word] * xscale + xmargin,context_to_index[context]*yscale + ymargin),radius)
+    t = Text(Point(focus_word_to_index[focus_word]*xscale + xmargin,context_to_index[context]*yscale-10+ymargin), focus_word)
+    t2 = Text(Point(focus_word_to_index[focus_word]*xscale + xmargin,context_to_index[context]*yscale+10+ymargin), context)
+    t.setFace("arial")
+    t2.setFace("courier")
+    t.setStyle ("bold")
+    acircle.setFill("red") 
+
+    t.draw(win)
+    t2.draw(win)
+    acircle.draw(win)
+
+  #c = Circle(Point(xscale*focus_word_to_index[focus_word],yscale*context_to_index[context]), 10)
+    
+#win.getMouse() # pause for click in window
+#win.close()
+
+raw_input()
 
 #------------------------------------------
 #print_contexts(outfile_word_to_contexts, data)
@@ -378,6 +487,15 @@ if (False):
     print "Done."
 
 
+#               SVD
+u, s, vh = np.linalg.svd(data, full_matrices=True)
+#print 383, u.shape, s.shape, vh.shape
+
+
+
+
+
+# Old PCA
     
 if normal_PCA:  # regular pca, not non-negative...    
     n, m = data1.shape
@@ -387,6 +505,13 @@ if normal_PCA:  # regular pca, not non-negative...
     # Project X onto PC space
     X_pca = np.dot(data1, myeigenvectors)
     #return X_pca
+
+
+
+if False:
+        myeigenvectors =u
+        myeigenvalues = s
+
 
 print_eigenvectors_of_contexts_to_file(outfile_context_eigenvectors, myeigenvectors, myeigenvalues)
 
@@ -416,6 +541,7 @@ mycovar2 = np.matmul(data, np.transpose(data))
 myeigenvalues2, myeigenvectors2 = np.linalg.eigh(mycovar2)  # compute eigenvectors
 
 
+
 print "  Eigenvectors for words complete."
 
 n, m = data2.shape
@@ -432,29 +558,48 @@ print "  Eigen computation finished."
 #return X_pca
 print "   Done."
  
-print ("10. Printing words to latex file.")
+if (False): 
+        myeigenvectors2 =vh.transpose()
+        myeigenvalues = s 
+ 
+print ("10. Printing words to latex file")
 formatstr = '%20d  %15s %10.3f %10i'
 headerformatstr = '%20s  %15s %10.3f'
 print "   Printing to ", outfolder
 
-if PrintEigenvectorsFlag:
-    for eigenno in range(NumberOfEigenvectors):
-        print >>outfile_word_eigenvectors
-        print >>outfile_word_eigenvectors,headerformatstr %("Eigenvector number", "word" , myeigenvalues2[eigenno])
-        print >>outfile_word_eigenvectors,"_____________________________________________"
-        templist = list()        
-        for wordno in range(focus_word_count):
-	    #print wordno, index_to_focus_word[wordno]
-            templist.append((wordno, myeigenvectors2[wordno,eigenno]))            
-        templist.sort(key = lambda second : second[1])
-        for i in range(focus_word_count):
-            mypair = templist[i]
-            wordno = mypair[0]
-            eigenvalue = mypair[1]
-            word = index_to_focus_word[wordno]
-            print >>outfile_word_eigenvectors, formatstr %(eigenno, word, eigenvalue, focus_word_usage[word])
-            #print eigenno, word, eigenvalue
+if False:
+
+        if PrintEigenvectorsFlag:
+            for eigenno in range(NumberOfEigenvectors):
+                print >>outfile_word_eigenvectors
+                print >>outfile_word_eigenvectors,headerformatstr %("Eigenvector number", "word" , myeigenvalues2[eigenno])
+                print >>outfile_word_eigenvectors,"_____________________________________________"
+                templist = list()        
+                for wordno in range(focus_word_count):
+	            #print wordno, index_to_focus_word[wordno], "Number of eigenvectors", NumberOfEigenvectors, "shape", myeigenvectors2.shape
+                    templist.append((wordno, myeigenvectors2[wordno,eigenno]))            
+                templist.sort(key = lambda second : second[1], reverse=True)
+                for i in range(focus_word_count):
+                    mypair = templist[i]
+                    wordno = mypair[0]
+                    eigenvalue = mypair[1]
+                    word = index_to_focus_word[wordno]
+                    print >>outfile_word_eigenvectors, formatstr %(eigenno, word, eigenvalue, focus_word_corpus_count[word])
+                    #print eigenno, word, eigenvalue
+            print >>outfile_word_eigenvectors, "\n\nUnsorted: \n\n"        
+            for eigenno in range(NumberOfEigenvectors):
+                print >>outfile_word_eigenvectors
+                print >>outfile_word_eigenvectors,headerformatstr %("Eigenvector number", "word" , myeigenvalues2[eigenno])
+                print >>outfile_word_eigenvectors,"_____________________________________________"
+                
+                for wordno in range(focus_word_count):
+                    word = index_to_focus_word[wordno]
+                    print >>outfile_word_eigenvectors, formatstr %(eigenno, word, myeigenvectors2[wordno,eigenno], focus_word_corpus_count[word])              
+         
+            
 #---------------------------------------------------------------------------#
+
+ 
 
 
 outfile_word_eigenvectors.close()
